@@ -41,10 +41,19 @@ LAST_YEAR = ("20251121", "20261120")
 
 
 def resolve_db(cli: str | None) -> Path:
-    for p in (cli, os.environ.get("ETF_DB")):
-        if p:
-            return Path(p)
-    raise SystemExit("没有数据库路径：用 --db 传入，或设置环境变量 ETF_DB")
+    """找数据库：--db > 环境变量 ETF_DB > 仓库自带的 data/market.db。"""
+    if cli:
+        return Path(cli)
+    env = os.environ.get("ETF_DB")
+    if env:
+        return Path(env)
+    local = Path(__file__).resolve().parent.parent / "data" / "market.db"
+    if local.exists():
+        return local
+    raise SystemExit(
+        "找不到行情库。先跑 `python data/fetch_etf_daily.py` 生成 data/market.db，"
+        "或用 --db 指定、或设置环境变量 ETF_DB"
+    )
 
 
 def load(db: Path, codes=CODES) -> dict[str, pd.DataFrame]:

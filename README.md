@@ -51,25 +51,65 @@ A 股宽基的特点是：**涨的时间短，跌的时间长且深**。择时�
 交易成本低（ETF 免印花税）。把同样的均线套到个股上，个体噪声会让信号质量显著下降；
 作者对 A 股日频个股做过的五组独立检验，超额收益全部为负，所以这里不发布个股版本。
 
-## 跑起来
-
-只需要一个带 `etf_daily` 表的 SQLite 数据库：
-
-```sql
--- 表的形状：ts_code, trade_date(YYYYMMDD 字符串), open, high, low, close
-select ts_code, trade_date, open, high, low, close from etf_daily where ts_code='510300.SH';
-```
+## 跑起来（三步，不需要 token）
 
 ```bash
-pip install -r requirements.txt
-export ETF_DB=/path/to/market.db
-
-python strategy/etf_gate.py                  # 最新交易日的信号与目标股数
-python strategy/etf_gate.py --date 20261120 --capital 100000
-python backtest/gate_backtest.py             # 账户级回测
-python backtest/gate_backtest.py --grid      # 参数网格
-python backtest/gate_backtest.py --scale 0.8 # 降杠杆
+git clone https://github.com/2384418321/ETF.git && cd ETF
+python -m pip install -r requirements.txt
+python data/fetch_etf_daily.py        # 拉行情，建 data/market.db
+python strategy/etf_gate.py           # 今天该持有还是空仓
 ```
+
+`data/fetch_etf_daily.py` 走东方财富公开 K 线接口，一次拉全历史，没有 token、没有配额。
+换台电脑重拉一次就够——`data/market.db` 不进仓库。
+
+想验证代码没坏：
+
+```bash
+python backtest/gate_backtest.py --start 20220101   # 应复现上面那张表的 +29.8%
+```
+
+其它开关：
+
+```bash
+python strategy/etf_gate.py --date 20261120 --capital 100000   # 指定信号日与总资产
+python backtest/gate_backtest.py --grid                        # 扫参数面
+python backtest/gate_backtest.py --scale 0.8                   # 降杠杆
+```
+
+如果你已经有一个带 `etf_daily` 表的 SQLite 库，用 `--db` 或环境变量 `ETF_DB` 指过去，
+表的形状是：`ts_code, trade_date(YYYYMMDD 字符串), open, high, low, close`。
+
+## 仓库里有什么
+
+| 路径 | 作用 |
+|---|---|
+| `strategy/etf_gate.py` | 出信号与目标股数。每天只跑这一个 |
+| `strategy/config.json` | 参数：均线长度、缓冲、单只仓位 |
+| `backtest/gate_backtest.py` | 账户级回测（现金 + 股数 + 手续费，真的撮合一遍） |
+| `data/fetch_etf_daily.py` | 建行情库。换机器第一步 |
+| `tools/evolve_cycle.py` | 策略体检 + 八道闸门 + 落地 + 回滚 |
+| `strategy_registry.json` | 登记表：哪些参数能改、能改到哪几档、哪些冻死、哪些方向禁止 |
+| `skills/strategy-self-evolution/SKILL.md` | 自进化的完整纪律，改参数前必读 |
+| `reflections/BACKTESTS.md` | 回测结论（体检时被引用） |
+| `reflections/evolve_cycle.jsonl` | 改动账：每次改了什么、预期什么、什么算改错 |
+| `docs/TAKEOVER.md` | 换台电脑从零接手 |
+| `RULES.md` | 交易规则条文 |
+
+## 它会自己进化，但改不乱
+
+```bash
+python tools/evolve_cycle.py                        # 体检，默认什么都不改
+python tools/evolve_cycle.py --apply "band=0.025"   # 过八道闸门才落地
+python tools/evolve_cycle.py --rollback etf_gate    # 改错回滚
+```
+
+八道闸门：冷却 ≥10 个交易日、同参数 60 日内 ≤2 次、新值必须在候选网格内、
+一次只改一处、不触犯冻结项与禁令、改前必须写下 `hypothesis` 与 `wrong_if`、改后 20 个交易日不许再动。
+
+`wrong_if` 是这套东西的核心——**改之前就写清楚什么算改错**。事后再判断，人一定会给自己找理由。
+
+自进化最大的风险不是不进化，是每天都进化。拿当期盈亏当反馈去拧参数，等于用几十个样本拟合噪声。
 
 ## 参数不是真理
 

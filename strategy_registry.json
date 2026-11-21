@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "gate": {
+    "cooldown_days": 10,
+    "min_streak": 3,
+    "observe_days": 20,
+    "oos_min_edge_pp": 3.0,
+    "oos_max_mdd_worse_pp": 2.0,
+    "rollback_underperform_pp": 3.0,
+    "max_changes_per_60d": 2
+  },
+  "strategies": [
+    {
+      "id": "etf_gate",
+      "name": "ETF 趋势闸门",
+      "book": null,
+      "sheet": null,
+      "status": "live",
+      "live_since": "20261123",
+      "benchmark": "buy_hold_5050",
+      "max_dd_tolerance": -0.15,
+      "params": {
+        "ma": {
+          "value": 20,
+          "grid": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            60
+          ],
+          "note": "均线周期"
+        },
+        "band": {
+          "value": 0.02,
+          "grid": [
+            0.0,
+            0.01,
+            0.015,
+            0.02,
+            0.025,
+            0.03,
+            0.04
+          ],
+          "note": "入场缓冲，门槛=MA×(1+band)"
+        },
+        "slot": {
+          "value": 0.4,
+          "grid": [
+            0.2,
+            0.25,
+            0.3,
+            0.35,
+            0.4
+          ],
+          "note": "单只目标仓位"
+        }
+      },
+      "frozen": [
+        "标的池 510300.SH + 510500.SH",
+        "只在信号翻转时成交，不做日频再平衡",
+        "两腿合计不超过 80%，剩余现金不下场",
+        "D 收盘出信号、D+1 开盘调仓"
+      ],
+      "forbidden_directions": [
+        "为了补亏而放大 slot 或引入杠杆",
+        "把 band 调到 0 追求更多交易次数",
+        "加入第三个标的凑分散"
+      ],
+      "note": "台账（xlsx 净值表）在仓库外，属于账户记录。没填 book 时体检只报最近一次回测结论；填上文件名即切回读台账。"
+    }
+  ],
+  "negative_list": [
+    "追涨停 / 昨涨停次日高开接力（5 年 4 年亏）",
+    "龙虎榜席位当买入信号（全分组负收益）",
+    "行业动量轮动（25 个 L×K 组合无一每年正）",
+    "44 个横截面因子单因子选股（全部为负）",
+    "Minervini 趋势模板 + VCP（已证伪）",
+    "把月收益目标定在 15%（与策略不在一个量级）",
+    "给小市值加权（微盘边在加剔跌停后消失）"
+  ],
+  "readme": "改参数一律走 tools/evolve_cycle.py --apply，别手改本文件。八道闸门的意义见 skills/strategy-self-evolution/SKILL.md。"
+}
