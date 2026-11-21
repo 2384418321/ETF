@@ -165,3 +165,30 @@ python tools/evolve_cycle.py --rollback etf_gate    # 回滚上次
 ```
 
 **自进化不等于自优化。** 这套东西能做的是：让每次改动都有据、可查、可退。它不能把噪声变成信号。
+
+---
+
+## 八、改动必须离开这台机器
+
+策略和技能不是只活在本地的。**任何策略或技能的改动，都要立刻同步到 GitHub 仓库 `2384418321/ETF`。**
+
+```bash
+python tools/publish_etf.py            # 同步 + 脱敏扫描 + 冒烟 + 提交 + 推送
+python tools/publish_etf.py --check    # 只看有没有漂移，不动文件
+```
+
+分工是一条硬边界，别混：
+
+| 东西 | 唯一实现在哪 | 同步方向 |
+|---|---|---|
+| 信号逻辑、回测代码 | `publish/ETF/`（仓库） | 线上 `tools/etf_gate.py` **import** 它，不复制逻辑 |
+| `strategy_registry.json` | 线上项目根 | 裁出 `etf_gate` + 清空台账字段 → 仓库 |
+| `tools/evolve_cycle.py` | 线上 `tools/` | 整份镜像 → 仓库 |
+| `skills/strategy-self-evolution/SKILL.md` | 线上 `skills/` | 整份镜像 → 仓库 |
+| 台账 xlsx | 线上项目根 | **永不入库** |
+
+`--apply` 与 `--rollback` 落地成功后会自动调一次 `tools/publish_etf.py`，所以改参数这个动作本身就把仓库更新掉了；每日 21:30 复盘再跑一次作兜底。同步失败不会撤销已经过闸的改动，但会把失败原因打出来——不许手动 `git push` 绕过扫描和冒烟。
+
+扫描拦的是本机信息外泄：用户名、盘符绝对路径、台账文件名、token 形状、计算机名。冒烟拦的是**推上去的东西跑不起来**：出信号、复现回测基准（总 +29.8%）、体检启动，三项全过才推。
+
+换台电脑能不能直接接手，判据只有一条：**`git clone` 之后，不靠任何人讲，照着 `docs/TAKEOVER.md` 能跑出当天信号。** 你自己试一遍，比读十遍文档确定。
