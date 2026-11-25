@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 CODES = ["510300.SH", "510500.SH"]
-LAST_YEAR = ("20251121", "20261120")
+LAST_YEAR_DAYS = 250     # 「近一年」= 最近 250 个交易日，滚动，不再写死日期
 
 
 def resolve_db(cli: str | None) -> Path:
@@ -134,12 +134,16 @@ def stats(eq: pd.Series, capital: float, start: str | None = None) -> dict:
         before = eq[eq.index < g.index[0]]
         base = float(before.iloc[-1]) if len(before) else capital
         yr[y] = (float(g.iloc[-1]) / base - 1) * 100
-    sub = e[(e.index >= LAST_YEAR[0]) & (e.index <= LAST_YEAR[1])]
-    base_py = float(eq[eq.index < LAST_YEAR[0]].iloc[-1]) if (eq.index < LAST_YEAR[0]).any() else capital
-    py = (float(sub.iloc[-1]) / base_py - 1) * 100 if len(sub) else np.nan
+    # 近一年：滚动取最后 LAST_YEAR_DAYS 个交易日，不写死日期
+    tail = eq.iloc[-LAST_YEAR_DAYS:] if len(eq) > LAST_YEAR_DAYS else eq
+    first = tail.index[0]
+    before = eq[eq.index < first]
+    base_py = float(before.iloc[-1]) if len(before) else capital
+    py = (float(tail.iloc[-1]) / base_py - 1) * 100
     return {
         "years": {k: round(v, 1) for k, v in yr.items()},
-        "past_year": round(py, 1),
+        "past_year": round(float(py), 1),
+        "past_year_from": str(first),
         "total": round((float(e.iloc[-1]) / float(e.iloc[0]) - 1) * 100, 1),
         "mdd": round(dd * 100, 1),
     }

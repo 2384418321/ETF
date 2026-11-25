@@ -58,8 +58,9 @@ python backtest/gate_backtest.py --start 20220101
 python tools/evolve_cycle.py
 ```
 
-它按 `strategy_registry.json` 算事实、下诊断、过八道闸门，默认什么都不改。
-要改参数只能走 `--apply`，八道闸门全过才落地，并强制先写下 `wrong_if`。
+它按 `strategy_registry.json` 算事实、下诊断、过九道闸门，默认什么都不改。
+要改参数只能走 `--apply`，九道闸门全过才落地；`--why` 与 `--wrong-if` 是必填，
+代码不接受模板，也不接受「先改了再说」。
 
 ---
 
@@ -71,7 +72,7 @@ python tools/evolve_cycle.py
 | `strategy/config.json` | 参数（均线长度、缓冲、单只仓位），改这里或走 `--apply` |
 | `backtest/gate_backtest.py` | 账户级回测。`--grid` 扫参数面，`--scale` 降杠杆 |
 | `data/fetch_etf_daily.py` | 建行情库。换机器第一步 |
-| `tools/evolve_cycle.py` | 体检 + 八道闸门 + 落地 + 回滚 |
+| `tools/evolve_cycle.py` | 体检 + 九道闸门 + 落地 + 回滚 |
 | `strategy_registry.json` | 登记表：哪些参数能改、能改到哪几档、哪些冻死、哪些方向禁止 |
 | `skills/strategy-self-evolution/` | 自进化协议的完整纪律，改参数前必读 |
 | `reflections/BACKTESTS.md` | 回测结论，体检时被引用 |
@@ -86,12 +87,13 @@ python tools/evolve_cycle.py
 `etf_gate` 的 `book` 从 `null` 改成文件名、`sheet` 填净值表的名字。
 体检会按表头名去找「日期」「总资产」两列，不依赖列位置。
 
-没填 `book` 时体检只报「最近回测」，闸门照样能跑，只是少了一层实盘表现。
+没填 `book` 时，体检拿回测曲线当替身（只看最近 250 个交易日），闸门照样能跑，
+只是少了一层实盘表现。
 
 ## 改参数的正确姿势
 
 ```bash
-python tools/evolve_cycle.py --apply "band=0.025"   # 八闸全过才落地
+python tools/evolve_cycle.py --apply "band=0.025" \n    --why "震荡期贴着均线反复穿越，2% 缓冲不够" \n    --wrong-if "20 个交易日后跑输基线 3 个百分点" \n    --ack-forbidden                                # 九闸全过才落地
 python tools/evolve_cycle.py --rollback etf_gate    # 改错了回滚
 ```
 

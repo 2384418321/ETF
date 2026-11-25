@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -33,6 +34,15 @@ create table if not exists etf_daily(
     open real, high real, low real, close real,
     vol real, amount real,
     primary key (ts_code, trade_date)
+)
+"""
+
+# 交易日历。evolve_cycle 的冷却期、频次、观察期全靠它，
+# 缺了这张表，所有「多少交易日过去了」都会静默算成 0。
+CAL_DDL = """
+create table if not exists trade_cal(
+    cal_date text primary key,
+    is_open  integer not null
 )
 """
 
@@ -71,11 +81,13 @@ def fetch(code: str, begin: str, end: str, retries: int = 3) -> list[tuple]:
                      float(p[4]), float(p[2]), float(p[5]), float(p[6]))
                 )
             return out
-        except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError) as e:
+        except Exception as e:
+            # 注意：RemoteDisconnected 不是 URLError，是 OSError 的子类。
+            # 只捕 URLError 会让一次断连直接掀桌，这里统一兜住再重试。
             last = e
             if i < retries - 1:
                 time.sleep(2 * (i + 1))
-    raise SystemExit(f"拉 {code} 失败：{last}")
+    raise RuntimeError(f"拉 {code} 失败：{last}")
 
 
 def main() -> None:
@@ -90,9 +102,17 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(str(out))
     con.execute(DDL)
+    con.execute(CAL_DDL)
     total = 0
+    failed = []
     for code in a.codes:
-        rows = fetch(code, a.begin, a.end)
+        try:
+            rows = fetch(code, a.begin, a.end)
+        except RuntimeError as e:
+            # 单只失败不拖垮另一只：已经拉到的行情照样入库，日历照样建
+            failed.append(code)
+            print(f"{code}  {e}", file=sys.stderr)
+            continue
         con.executemany(
             "insert or replace into etf_daily"
             "(ts_code,trade_date,open,high,low,close,vol,amount) values(?,?,?,?,?,?,?,?)",
@@ -101,8 +121,17 @@ def main() -> None:
         con.commit()
         total += len(rows)
         print(f"{code}  {rows[0][1]} → {rows[-1][1]}  {len(rows)} 行  收盘 {rows[-1][5]}")
+    # 用已入库的行情反推交易日历：有行情的日子就是开市日
+    con.execute("insert or replace into trade_cal(cal_date,is_open) "
+                "select distinct trade_date, 1 from etf_daily")
+    con.commit()
+    cal = con.execute("select count(*) from trade_cal where is_open=1").fetchone()[0]
     con.close()
     print(f"合计 {total} 行 → {out}")
+    print(f"交易日历 {cal} 天 → trade_cal")
+    if failed:
+        print(f"没拉到的：{', '.join(failed)}（库里保留旧数据，重跑一次补）", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

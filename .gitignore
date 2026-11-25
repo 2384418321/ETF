@@ -5,6 +5,6 @@ __pycache__/
 *.sqlite3
 *.xlsx
 *.csv
+.venv/
 .preview/
 reflections/evolve_*.md
-.preview/
